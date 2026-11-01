@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "dtsplat: dynamic triangle splatting with repaired position gradients"
+type: software
+authors:
+  - family-names: Hossain
+    given-names: Samir
+    orcid: "https://orcid.org/0009-0003-8986-0946"
+    affiliation: "Department of Electrical and Computer Engineering, Texas Tech University, Lubbock, TX, USA"
+version: 0.1.0
+date-released: 2026-11-01
+repository-code: "https://github.com/SamirHossain099/dtsplat"
+license: MIT
+keywords:
+  - triangle splatting
+  - dynamic scene reconstruction
+  - differentiable rendering
+  - radiance fields
+  - novel view synthesis

@@ -1,0 +1,68 @@
+﻿diff --git a/scene/dataset_readers.py b/scene/dataset_readers.py
+index 316b20f..08bbc73 100644
+--- a/scene/dataset_readers.py
++++ b/scene/dataset_readers.py
+@@ -91,7 +91,7 @@ def resize_to_multiple(tensor, multiple=28):
+ 
+ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
+     # Model to extract normal map
+-    model = torch.hub.load('yvanyin/metric3d', 'metric3d_vit_large', pretrain=True)
++    model = torch.hub.load('yvanyin/metric3d', 'metric3d_vit_large', pretrain=True, trust_repo=True)
+     model.eval().cuda()
+ 
+     cam_infos = []
+diff --git a/scene/triangle_model.py b/scene/triangle_model.py
+index f70a240..a2cd6e8 100644
+--- a/scene/triangle_model.py
++++ b/scene/triangle_model.py
+@@ -27,7 +27,8 @@ from utils.system_utils import mkdir_p
+ from utils.sh_utils import RGB2SH
+ from utils.graphics_utils import BasicPointCloud
+ import math
+-from pytorch3d.ops import knn_points
++# pytorch3d import removed: knn_points was never used, and pytorch3d has no
++# Windows wheels for torch 2.11+cu128
+ import triangulation
+ #import igl
+ 
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 68685ed..4a9d3bc 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -24,5 +24,10 @@ target_include_directories(triangulation PUBLIC ${TRIANGULATION_INCLUDES})
+ 
+ target_link_libraries(triangulation PUBLIC CUDA::cudart CUDA::cuda_driver TBB::tbb)
+ 
+-target_compile_options(triangulation PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo -O3
+-                                       -Wall -Wno-unknown-pragmas> -O3)
++# GCC-style warning/opt flags break MSVC (nvcc forwards unknown flags to cl)
++if(MSVC)
++  target_compile_options(triangulation PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo -O3>)
++else()
++  target_compile_options(triangulation PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo -O3
++                                         -Wall -Wno-unknown-pragmas> -O3)
++endif()
+diff --git a/src/utils/cuda_helpers.h b/src/utils/cuda_helpers.h
+index e88aaf4..6002572 100644
+--- a/src/utils/cuda_helpers.h
++++ b/src/utils/cuda_helpers.h
+@@ -2,6 +2,7 @@
+ 
+ #include <functional>
+ #include <stdexcept>
++#include <string>
+ 
+ #include <cuda.h>
+ #include <cuda_runtime.h>
+diff --git a/submodules/diff-triangle2-rasterization b/submodules/diff-triangle2-rasterization
+--- a/submodules/diff-triangle2-rasterization
++++ b/submodules/diff-triangle2-rasterization
+@@ -1 +1 @@
+-Subproject commit 42e62aaf03f87835105ed84dd8ed513efd458716
++Subproject commit 42e62aaf03f87835105ed84dd8ed513efd458716-dirty
+diff --git a/submodules/simple-knn b/submodules/simple-knn
+--- a/submodules/simple-knn
++++ b/submodules/simple-knn
+@@ -1 +1 @@
+-Subproject commit 86710c2d4b46680c02301765dd79e465819c8f19
++Subproject commit 86710c2d4b46680c02301765dd79e465819c8f19-dirty

@@ -1,0 +1,6 @@
+# torch/torchvision must come from the cu128 index for RTX 5080 (sm_120):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+numpy
+pillow
+tqdm
+pytest

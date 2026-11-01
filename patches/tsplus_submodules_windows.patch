@@ -1,0 +1,148 @@
+﻿diff --git a/cuda_rasterizer/backward.cu b/cuda_rasterizer/backward.cu
+index 446d74a..97e5dc4 100644
+--- a/cuda_rasterizer/backward.cu
++++ b/cuda_rasterizer/backward.cu
+@@ -244,11 +244,32 @@
+ 	computeColorFromSH(idx, D, M, vertex, *campos,
+ 		shs,
+ 		clamped,
+-		(glm::vec3*)dL_dcolor,   
+-		(glm::vec3*)dL_dvertices3D, 
++		(glm::vec3*)dL_dcolor,
++		(glm::vec3*)dL_dvertices3D,
+ 		(glm::vec3*)dL_dsh
+ 	);
+ 
++	// FIX (DTS): dL_dpoints2D — the interior (barycentric color-interpolation)
++	// position gradients accumulated per-vertex in renderCUDA — was received
++	// here but never used, silently discarding the dominant position-gradient
++	// path for textured triangles. Convert pixel-space gradients to 3D via the
++	// projection chain (including the ndc2Pix scale 0.5*W / 0.5*H).
++	float dL_dpx = dL_dpoints2D[2 * idx];
++	float dL_dpy = dL_dpoints2D[2 * idx + 1];
++	if (dL_dpx != 0.0f || dL_dpy != 0.0f)
++	{
++		float hx = proj[0] * vertex.x + proj[4] * vertex.y + proj[8] * vertex.z + proj[12];
++		float hy = proj[1] * vertex.x + proj[5] * vertex.y + proj[9] * vertex.z + proj[13];
++		float hw = proj[3] * vertex.x + proj[7] * vertex.y + proj[11] * vertex.z + proj[15];
++		float p_w = 1.0f / (hw + 0.0000001f);
++		float mul1 = hx * p_w * p_w;
++		float mul2 = hy * p_w * p_w;
++		float gx = dL_dpx * 0.5f * W;   // d(pixel)/d(ndc) = S/2
++		float gy = dL_dpy * 0.5f * H;
++		dL_dvertices3D[idx].x += (proj[0] * p_w - proj[3] * mul1) * gx + (proj[1] * p_w - proj[3] * mul2) * gy;
++		dL_dvertices3D[idx].y += (proj[4] * p_w - proj[7] * mul1) * gx + (proj[5] * p_w - proj[7] * mul2) * gy;
++		dL_dvertices3D[idx].z += (proj[8] * p_w - proj[11] * mul1) * gx + (proj[9] * p_w - proj[11] * mul2) * gy;
++	}
+ }
+ 
+  
+@@ -387,9 +408,15 @@
+ 		float mul1 = (proj[0] * vertices[3 * vertex_index] + proj[4] * vertices[3 * vertex_index + 1] + proj[8] * vertices[3 * vertex_index + 2] + proj[12]) * p_w[cumsum_for_triangle + i] * p_w[cumsum_for_triangle + i];
+ 		float mul2 = (proj[1] * vertices[3 * vertex_index] + proj[5] * vertices[3 * vertex_index + 1] + proj[9] * vertices[3 * vertex_index + 2] + proj[13]) * p_w[cumsum_for_triangle + i] * p_w[cumsum_for_triangle + i];
+ 				
+-		dL_dvertices3D[vertex_index].x += (proj[0] * p_w[cumsum_for_triangle + i] - proj[3] * mul1) * loss_points_x[i]  + (proj[1] * p_w[cumsum_for_triangle + i] - proj[3] * mul2) * loss_points_y[i] + transposed_dL_ddepth.x / 3;
+-		dL_dvertices3D[vertex_index].y += (proj[4] * p_w[cumsum_for_triangle + i] - proj[7] * mul1) * loss_points_x[i] + (proj[5] * p_w[cumsum_for_triangle + i] - proj[7] * mul2) * loss_points_y[i] + transposed_dL_ddepth.y / 3;
+-		dL_dvertices3D[vertex_index].z += (proj[8] * p_w[cumsum_for_triangle + i] - proj[11] * mul1) * loss_points_x[i] + (proj[9] * p_w[cumsum_for_triangle + i] - proj[11] * mul2) * loss_points_y[i] + transposed_dL_ddepth.z / 3;
++		// FIX (DTS): dL_dnormals/dL_doffsets live in PIXEL space (edge functions
++		// are evaluated against pixf), but this chain converts NDC->3D. Apply
++		// the missing d(pixel)/d(ndc) = S/2 factor (was under-scaling the
++		// window-path position gradients ~100x at 256px).
++		float lpx = loss_points_x[i] * 0.5f * W;
++		float lpy = loss_points_y[i] * 0.5f * H;
++		dL_dvertices3D[vertex_index].x += (proj[0] * p_w[cumsum_for_triangle + i] - proj[3] * mul1) * lpx  + (proj[1] * p_w[cumsum_for_triangle + i] - proj[3] * mul2) * lpy + transposed_dL_ddepth.x / 3;
++		dL_dvertices3D[vertex_index].y += (proj[4] * p_w[cumsum_for_triangle + i] - proj[7] * mul1) * lpx + (proj[5] * p_w[cumsum_for_triangle + i] - proj[7] * mul2) * lpy + transposed_dL_ddepth.y / 3;
++		dL_dvertices3D[vertex_index].z += (proj[8] * p_w[cumsum_for_triangle + i] - proj[11] * mul1) * lpx + (proj[9] * p_w[cumsum_for_triangle + i] - proj[11] * mul2) * lpy + transposed_dL_ddepth.z / 3;
+ 		
+ 	 }
+  
+diff --git a/cuda_rasterizer/forward.cu b/cuda_rasterizer/forward.cu
+index 72652ff..8418a68 100644
+--- a/cuda_rasterizer/forward.cu
++++ b/cuda_rasterizer/forward.cu
+@@ -25,6 +25,9 @@
+  #include <cooperative_groups.h>
+  #include <cooperative_groups/reduce.h>
+  namespace cg = cooperative_groups;
++
++ // MSVC has no uint typedef (glibc provides it on Linux)
++ typedef unsigned int uint;
+  
+  
+  
+@@ -392,7 +395,7 @@
+ 	 }
+  
+ 	   
+-	 if (distance_points > 1600 or distance_points < 1 or dist > -1) {
++	 if (distance_points > 1600 || distance_points < 1 || dist > -1) {
+ 		 radii[idx] = 0;
+ 		 tiles_touched[idx] = 0;
+ 		 scaling[idx] = 0.0f;
+diff --git a/cuda_rasterizer/utils.cu b/cuda_rasterizer/utils.cu
+index ceb8a92..776d3f5 100644
+--- a/cuda_rasterizer/utils.cu
++++ b/cuda_rasterizer/utils.cu
+@@ -26,7 +26,7 @@ __global__ void compute_relocation(
+     for (int i = 1; i <= N_idx; ++i) {
+         for (int k = 0; k <= (i-1); ++k) {
+             float bin_coeff = binoms[(i-1) * n_max + k];
+-            float term = (pow(-1, k) / sqrt(k + 1)) * pow(opacity_new[idx], k + 1);
++            float term = (powf(-1.0f, (float)k) / sqrtf((float)(k + 1))) * powf(opacity_new[idx], (float)(k + 1));
+             denom_sum += (bin_coeff * term);
+         }
+     }
+diff --git a/rasterize_points.cu b/rasterize_points.cu
+index c415c50..cff6d20 100644
+--- a/rasterize_points.cu
++++ b/rasterize_points.cu
+@@ -21,7 +21,15 @@
+  */
+ 
+ #include <math.h>
++// torch/extension.h pulls in dynamo/compiled_autograd.h, which breaks under
++// nvcc+MSVC on torch>=2.9 (C2872 'std' ambiguous). Lighter headers suffice
++// for the tensor API used here; ext.cpp (plain C++) keeps torch/extension.h.
++#ifdef __CUDACC__
++#include <ATen/ATen.h>
++#include <torch/types.h>
++#else
+ #include <torch/extension.h>
++#endif
+ #include <cstdio>
+ #include <sstream>
+ #include <iostream>
+diff --git a/rasterize_points.h b/rasterize_points.h
+index 494fc16..b303f48 100644
+--- a/rasterize_points.h
++++ b/rasterize_points.h
+@@ -21,7 +21,12 @@
+  */
+ 
+  #pragma once
++ #ifdef __CUDACC__
++ #include <ATen/ATen.h>
++ #include <torch/types.h>
++ #else
+  #include <torch/extension.h>
++ #endif
+  #include <cstdio>
+  #include <tuple>
+  #include <string>
+diff --git a/spatial.h b/spatial.h
+index 280c953..8162c9e 100644
+--- a/spatial.h
++++ b/spatial.h
+@@ -9,6 +9,11 @@
+  * For inquiries contact  george.drettakis@inria.fr
+  */
+ 
++#ifdef __CUDACC__
++#include <ATen/ATen.h>
++#include <torch/types.h>
++#else
+ #include <torch/extension.h>
++#endif
+ 
+ torch::Tensor distCUDA2(const torch::Tensor& points);
+\ No newline at end of file
