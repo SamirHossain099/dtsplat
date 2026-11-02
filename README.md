@@ -1,5 +1,7 @@
 # dtsplat
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23875183.svg)](https://doi.org/10.5281/zenodo.23875183)
+
 Dynamic triangle splatting: reconstruction of continuously deforming scenes with
 triangle splatting primitives, together with the finite-difference audit and the
 repair of the position gradients in the released Triangle Splatting+ rasterizer.
@@ -52,7 +54,8 @@ python scripts/train_dnerf.py -s data/data/jumpingjacks -m out/jj --deform-model
 ```
 
 `scripts/eval_metrics.py` regenerates the benchmark table over the released
-checkpoints, `scripts/bench_efficiency.py` the efficiency table, and
+checkpoints (per-scene zips attached to the v0.1.0 GitHub release; unpack them
+into `out/`), `scripts/bench_efficiency.py` the efficiency table, and
 `scripts/probe_single_triangle.py` the gradient audit. Per-scene configurations
 match the manuscript; depth damping (`--z-damp`) is disclosed per scene there.
 

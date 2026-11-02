@@ -9,6 +9,7 @@ authors:
     affiliation: "Department of Electrical and Computer Engineering, Texas Tech University, Lubbock, TX, USA"
 version: 0.1.0
 date-released: 2026-11-01
+doi: 10.5281/zenodo.23875183
 repository-code: "https://github.com/SamirHossain099/dtsplat"
 license: MIT
 keywords:
