@@ -40,10 +40,39 @@ python -m venv .venv
 ```
 
 Clone Triangle Splatting+ (github.com/trianglesplatting2/triangle-splatting2,
-with submodules) into `external/triangle-splatting-plus`, apply the patches in
-`patches/`, and build its rasterizer and triangulation modules following its
-README. The D-NeRF scenes come from the D-NeRF release; HyperNeRF scenes from
+with submodules) into `external/triangle-splatting-plus` at the audited commits
+listed below, apply the patches in `patches/`, and build its rasterizer and
+triangulation modules following its README. The D-NeRF scenes come from the D-NeRF release; HyperNeRF scenes from
 the HyperNeRF release, converted with `scripts/hypernerf_convert.py`.
+
+## Audited upstream code
+
+The gradient audit and the patches refer to this exact upstream state, cloned
+on 2026-07-05:
+
+| Repository | Commit | Date |
+|---|---|---|
+| trianglesplatting2/triangle-splatting2 | `fcde03dd0c3953ce1d47b210485a5e8a9e14b016` | 2025-10-09 |
+| trianglesplatting2/diff-triangle2-rasterization (submodule) | `42e62aaf03f87835105ed84dd8ed513efd458716` | 2025-10-08 |
+
+SHA-256 of the unmodified `cuda_rasterizer/backward.cu` at the rasterizer
+commit, the file in which the defects were found:
+
+```
+8ceaf7c0199dd76b914b6269428cde76598e93e6371228a7c1f4008a948860aa
+```
+
+Check a clone against it, before applying the patches:
+
+```
+git -C external/triangle-splatting-plus/submodules/diff-triangle2-rasterization show 42e62aa:cuda_rasterizer/backward.cu | sha256sum
+```
+
+As of 2026-11-02 neither repository had a later commit. The upstream issue cited
+in the manuscript as consistent with the finding is triangle-splatting2 issue 25
+(opened 2026-03-24, open without a reply as of 2026-11-02). The digest is
+recorded here rather than a copy of the file because the upstream rasterizer is
+partly governed by the Inria Gaussian-Splatting license.
 
 ## Reproducing the paper
 
