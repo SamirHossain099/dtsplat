@@ -1,0 +1,15 @@
+# Deny by default: only the package, its scripts and its documentation are tracked.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/CITATION.cff
+!/requirements.txt
+!/conftest.py
+!/dts/
+!/scripts/
+!/patches/
+!/tests/
+__pycache__/
+*.pyc
+.pytest_cache/

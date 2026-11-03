@@ -45,6 +45,20 @@ def test_git_view_clean():
         assert top not in FORBIDDEN_DIRS, f"forbidden directory tracked by git: {line}"
 
 
+def test_no_tracked_bytecode():
+    out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        return  # not a git checkout: test_no_stray_bytecode covers the directory
+    for line in out.stdout.splitlines():
+        assert not line.endswith(".pyc"), f"bytecode tracked by git: {line}"
+
+
+def test_no_stray_bytecode():
+    # walk() skips __pycache__, which every test run recreates; a .pyc anywhere else is stray.
+    for rel in walk():
+        assert rel.suffix != ".pyc", f"stray bytecode in package: {rel}"
+
+
 def test_no_em_dashes_in_released_text():
     for rel in walk():
         p = ROOT / rel
